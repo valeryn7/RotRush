@@ -28,4 +28,26 @@ images {
 images {
   image: "/assets/items/circle_debug.png"
 }
+animations {
+  id: "explosion"
+  images {
+    image: "/assets/items/explosion_blue_1.png"
+  }
+  images {
+    image: "/assets/items/explosion_blue_2.png"
+  }
+  images {
+    image: "/assets/items/explosion_blue_3.png"
+  }
+  images {
+    image: "/assets/items/explosion_blue_4.png"
+  }
+  images {
+    image: "/assets/items/explosion_blue_5.png"
+  }
+  images {
+    image: "/assets/items/explosion_blue_6.png"
+  }
+  fps: 15
+}
 extrude_borders: 2

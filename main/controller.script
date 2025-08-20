@@ -1,7 +1,7 @@
 local levels = require "main.levels"
 local rendercam = require "rendercam.rendercam"
-local FOOTER_NAMES = { "item1", "item2", "item3" }
 
+local FOOTER_NAMES = { "item1", "item2", "item3" }
 local SPAWN_EVERY = 0.8
 local PAD = 32
 
@@ -10,6 +10,7 @@ local ITEM_WIDTH_FRAC = 0.18
 local ITEM_SCALE_MIN = 0.85
 local ITEM_SCALE_MAX = 1.6
 
+-- Retorna límites para generar posición aleatoria de ítems
 local function spawn_bounds()
 	local w, h = rendercam.window.x, rendercam.window.y
 	local left  = -w * 0.5 + PAD
@@ -18,6 +19,7 @@ local function spawn_bounds()
 	return left, right, top
 end
 
+-- Calcula escala de ítem según resolución de pantalla
 local function item_scale_for_width()
 	local w = rendercam.window.x
 	local target_w = w * ITEM_WIDTH_FRAC
@@ -27,11 +29,7 @@ local function item_scale_for_width()
 	return s
 end
 
-local function input_to_world(x, y)
-	local w, h = rendercam.window.x, rendercam.window.y
-	return x - w * 0.5, y - h * 0.5
-end
-
+-- Devuelve si el jugador completó la receta del nivel
 local function recipe_complete(self)
 	for _, k in ipairs(self.level.target) do
 		if not self.collected[k] then return false end
@@ -39,6 +37,7 @@ local function recipe_complete(self)
 	return true
 end
 
+-- Spawnea un ítem aleatorio de la pool
 local function spawn_item(self)
 	local filtered_pool = {}
 	for _, cfg in ipairs(self.level.pool) do
@@ -47,7 +46,6 @@ local function spawn_item(self)
 		end
 	end
 
-	-- Si ya no quedan ítems para spawnear, no hacer nada
 	if #filtered_pool == 0 then return end
 
 	local cfg = filtered_pool[math.random(#filtered_pool)]
@@ -59,15 +57,15 @@ local function spawn_item(self)
 	local id = factory.create("#item_factory", pos, nil, {
 		kind       = cfg.kind,
 		is_correct = cfg.is_correct,
-		radius     = 80 * s
+		radius     = 80 * s  -- el radius se escala con el tamaño del sprite
 	})
 
 	go.set_parent(id, self.screen_go, true)
 	go.set_scale(vmath.vector3(s, s, 1), id)
-
 	table.insert(self.active_items, id)
 end
 
+-- Actualiza el footer visual con los ítems recolectados
 local function update_footer(self)
 	local items = self.level.target
 	local total = #items
@@ -82,11 +80,6 @@ local function update_footer(self)
 			sprite.play_flipbook(sprite_id, kind)
 			sprite.set_constant(sprite_id, "tint", tint)
 			msg.post(sprite_id, "enable")
-
-			-- Mostrar cantidad si fue recolectado
-			if collected then
-				-- Aquí podrías agregar números o efectos extra si tenés nodos o etiquetas
-			end
 		end
 	end
 
@@ -100,7 +93,8 @@ end
 function init(self)
 	msg.post(".", "acquire_input_focus")
 	math.randomseed(os.time())
-
+	print("rendercam:", rendercam)
+	
 	self.level = levels.LEVELS[1]
 	self.collected, self.target_set = {}, {}
 	for _, k in ipairs(self.level.target) do
@@ -130,25 +124,28 @@ function update(self, dt)
 end
 
 function on_input(self, action_id, action)
-	local is_click = (action_id == hash("click") or action_id == hash("touch"))
-	if is_click and action.pressed then
-		local wx, wy = input_to_world(action.x, action.y)
-		for _, id in ipairs(self.active_items) do
-			if go.exists(id) then
-				msg.post(id, hash("check_hit"), {
-					world_x = wx,
-					world_y = wy,
-					controller = msg.url()
+	if action_id == hash("touch") and action.pressed then
+		local world_pos = rendercam.screen_to_world_2d(action.screen_x, action.screen_y)
+
+		-- Limpiar referencias inválidas
+		local valid_items = {}
+		for _, item_id in ipairs(self.active_items) do
+			if go.exists(item_id) then
+				msg.post(item_id, "check_hit", {
+					world_x = world_pos.x,
+					world_y = world_pos.y,
+					controller = go.get_id()
 				})
+				table.insert(valid_items, item_id)
 			end
 		end
+		self.active_items = valid_items
 	end
 end
 
 function on_message(self, message_id, message)
 	if message_id == hash("item_picked") then
 		print("🧪 picked:", message.kind, "| correcto:", message.is_correct)
-		print("🔎 kind string:", hash_to_hex(message.kind))
 
 		if message.is_correct and self.target_set[message.kind] then
 			self.collected[message.kind] = true
@@ -163,6 +160,7 @@ function on_message(self, message_id, message)
 				update_footer(self)
 			end
 		end
+
 	elseif message_id == hash("item_destroyed") then
 		for i, id in ipairs(self.active_items) do
 			if id == message.id then

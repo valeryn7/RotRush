@@ -1,6 +1,7 @@
 go.property("kind", hash("unknown"))
 go.property("is_correct", false)
 go.property("radius", 80)
+go.property("fx", msg.url("#fx")) 
 
 local SPEED = 220
 
@@ -8,7 +9,9 @@ function init(self)
 	self.dead = false
 	self.speed = SPEED
 
-	-- ajustar radio al scale
+	msg.post(self.fx, "disable")
+
+	-- Ajustar radio al scale
 	local s = go.get_scale().x
 	self.radius = self.radius * s
 
@@ -29,27 +32,59 @@ function update(self, dt)
 	go.set_position(p)
 
 	if p.y < -200 then
-		msg.post(".", "destroy_self")
+		msg.post(self.controller or ".", "item_destroyed", { id = go.get_id() })
+		go.delete()
+		return
 	end
 end
 
 function on_message(self, message_id, message, sender)
-	if message_id == hash("destroy_self") then
+	if message_id == hash("destroy_explosive") then
+		if self.dead then return end
+		self.dead = true
+
+		-- Activar sprite y animación de explosión
+		msg.post("fx#sprite", "enable")
+		msg.post("fx#sprite", "play_animation", { id = hash("explosion") })
+
+		-- Ocultar debug
+		msg.post("#debug", "disable")
+
+		-- Destruir con delay
+		timer.delay(0.4, false, function()
+			go.delete()
+		end)
+
+	elseif message_id == hash("destroy_silent") then
 		self.dead = true
 		go.delete()
 
 	elseif message_id == hash("check_hit") then
 		if self.dead then return end
-		local p = go.get_position()
-		local dx = message.world_x - p.x
-		local dy = message.world_y - p.y
-		if (dx*dx + dy*dy) <= (self.radius*self.radius) then
-			msg.post(message.controller, hash("item_picked"), {
-				id = go.get_id(),
+
+		self.controller = message.controller
+
+		local dx = go.get_position().x - message.world_x
+		local dy = go.get_position().y - message.world_y
+		local dist2 = dx * dx + dy * dy
+
+		if dist2 <= self.radius * self.radius then
+			self.dead = true
+
+			-- Activar fx y animación
+			msg.post(self.fx, "enable")
+			msg.post(self.fx, "play_animation", { id = hash("explosion") })
+
+			-- Notificar al controlador
+			msg.post(self.controller, "item_picked", {
 				kind = self.kind,
 				is_correct = self.is_correct
 			})
-			msg.post(".", "destroy_self")
+
+			timer.delay(0.3, false, function()
+				msg.post(self.controller, "item_destroyed", { id = go.get_id() })
+				go.delete()
+			end)
 		end
 
 	elseif message_id == hash("set_kind") then
@@ -57,7 +92,6 @@ function on_message(self, message_id, message, sender)
 		sprite.play_flipbook("#sprite", self.kind)
 
 	elseif message_id == hash("show_debug") then
-		-- mostrar el círculo y ajustar color (rojo si es incorrecto, verde si es correcto)
 		msg.post("#debug", "enable")
 		local tint = self.is_correct and vmath.vector4(0, 1, 0, 0.5) or vmath.vector4(1, 0, 0, 0.5)
 		sprite.set_constant("#debug", "tint", tint)
