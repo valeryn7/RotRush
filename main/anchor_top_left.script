@@ -1,0 +1,53 @@
+-- /main/screen/anchor_top_left.script
+local rendercam = require "rendercam.rendercam"
+
+-- Ajustables en el inspector
+go.property("margin_left", 56)   -- << más a la derecha
+go.property("margin_top", 36)
+go.property("z", 10)
+
+go.property("base_px", 160)
+go.property("width_frac", 0.12)
+go.property("min_px", 96)
+go.property("max_px", 200)
+
+-- Si pivot CENTER, poné la mitad del tamaño deseado; con NW dejá 0
+go.property("half_w", 0)
+go.property("half_h", 0)
+
+local function parent_scale()
+	local s = 1
+	local p = go.get_parent()
+	if p and p ~= hash("") then
+		local sc = go.get(p, "scale")
+		if sc then s = sc.x end
+	end
+	return s
+end
+
+local function rescale(self)
+	local w = rendercam.window.x
+	local target_px = math.min(math.max(w * self.width_frac, self.min_px), self.max_px)
+	local s_local = (target_px / self.base_px) / parent_scale()
+	go.set_scale(vmath.vector3(s_local, s_local, 1))
+end
+
+local function place(self)
+	local w, h = rendercam.window.x, rendercam.window.y
+	local s = parent_scale()
+	local x_world = -w * 0.5 + self.margin_left + self.half_w
+	local y_world =  h * 0.5 - self.margin_top  - self.half_h
+	go.set_position(vmath.vector3(x_world / s, y_world / s, self.z))
+end
+
+local function layout(self) rescale(self); place(self) end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	layout(self)
+	timer.delay(0, false, function() layout(self) end)
+end
+
+function on_message(self, mid)
+	if mid == hash("window_resized") then layout(self) end
+end

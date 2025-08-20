@@ -1,0 +1,29 @@
+-- /main/screen/bg_cover.script
+local rendercam = require "rendercam.rendercam"
+local BASE_W, BASE_H = 768, 1152
+
+local function cover_bg()
+	local w, h = rendercam.window.x, rendercam.window.y
+	local sx, sy = w / BASE_W, h / BASE_H
+	local cover = math.max(sx, sy)
+
+	local s = 1
+	local p = go.get_parent()
+	if p and p ~= hash("") then
+		local sc = go.get(p, "scale")
+		if sc then s = sc.x end
+	end
+
+	go.set_scale(vmath.vector3(cover / s, cover / s, 1))
+	go.set_position(vmath.vector3(0, 0, -5))
+end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	cover_bg()
+	timer.delay(0, false, cover_bg)  -- asegurar tras el primer frame en HTML5
+end
+
+function on_message(self, mid)
+	if mid == hash("window_resized") then cover_bg() end
+end

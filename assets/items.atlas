@@ -1,0 +1,31 @@
+images {
+  image: "/assets/items/bean.png"
+}
+images {
+  image: "/assets/items/burger.png"
+}
+images {
+  image: "/assets/items/cake.png"
+}
+images {
+  image: "/assets/items/cup.png"
+}
+images {
+  image: "/assets/items/duck.png"
+}
+images {
+  image: "/assets/items/glasses.png"
+}
+images {
+  image: "/assets/items/pizza.png"
+}
+images {
+  image: "/assets/items/shoes.png"
+}
+images {
+  image: "/assets/items/tutu.png"
+}
+images {
+  image: "/assets/items/circle_debug.png"
+}
+extrude_borders: 2

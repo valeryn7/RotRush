@@ -1,0 +1,68 @@
+go.property("kind", hash("unknown"))
+go.property("is_correct", false)
+go.property("radius", 80)
+
+local SPEED = 220
+
+function init(self)
+	self.dead = false
+	self.speed = SPEED
+
+	-- ajustar radio al scale
+	local s = go.get_scale().x
+	self.radius = self.radius * s
+
+	-- Ocultar el círculo debug al inicio
+	msg.post("#debug", "disable")
+
+	-- Mostrar sprite del ítem si tiene
+	if self.kind ~= hash("unknown") then
+		sprite.play_flipbook("#sprite", self.kind)
+	end
+end
+
+function update(self, dt)
+	if self.dead then return end
+
+	local p = go.get_position()
+	p.y = p.y - self.speed * dt
+	go.set_position(p)
+
+	if p.y < -200 then
+		msg.post(".", "destroy_self")
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("destroy_self") then
+		self.dead = true
+		go.delete()
+
+	elseif message_id == hash("check_hit") then
+		if self.dead then return end
+		local p = go.get_position()
+		local dx = message.world_x - p.x
+		local dy = message.world_y - p.y
+		if (dx*dx + dy*dy) <= (self.radius*self.radius) then
+			msg.post(message.controller, hash("item_picked"), {
+				id = go.get_id(),
+				kind = self.kind,
+				is_correct = self.is_correct
+			})
+			msg.post(".", "destroy_self")
+		end
+
+	elseif message_id == hash("set_kind") then
+		self.kind = message.kind or self.kind
+		sprite.play_flipbook("#sprite", self.kind)
+
+	elseif message_id == hash("show_debug") then
+		-- mostrar el círculo y ajustar color (rojo si es incorrecto, verde si es correcto)
+		msg.post("#debug", "enable")
+		local tint = self.is_correct and vmath.vector4(0, 1, 0, 0.5) or vmath.vector4(1, 0, 0, 0.5)
+		sprite.set_constant("#debug", "tint", tint)
+
+	elseif message_id == hash("hide_debug") then
+		msg.post("#debug", "disable")
+	end
+end

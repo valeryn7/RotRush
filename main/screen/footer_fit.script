@@ -1,0 +1,49 @@
+local rendercam = require "rendercam.rendercam"
+
+go.property("margin_bottom", 24)
+
+local NAMES = { "item1", "item2", "item3" }
+
+local function parent_scale()
+	local p = go.get_parent()
+	local sc = p and go.get(p, "scale") or vmath.vector3(1,1,1)
+	return sc.x or 1
+end
+
+local function place_footer(total)
+	local w, h = rendercam.window.x, rendercam.window.y
+	local s = parent_scale()
+	local gap = 200
+	local mid = 0
+
+	for i = 1, total do
+		local dx = (i - 1) - (total - 1) / 2
+		local go_id = NAMES[i]
+		local pos = vmath.vector3(mid + dx * gap * s, -h / 2 + 140, 1) -- Z a 1
+		go.set_position(pos, go_id)
+	end
+end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+end
+
+function on_message(self, message_id, message)
+	if message_id == hash("set_footer_items") and message.items then
+		local total = #message.items
+		for i, name in ipairs(NAMES) do
+			if i <= total then
+				local data = message.items[i]
+				local kind = data.kind
+				local tint = data.tint or vmath.vector4(1, 1, 1, 1)
+
+				sprite.play_flipbook(name .. "#sprite", kind)
+				sprite.set_constant(name .. "#sprite", "tint", tint)
+				msg.post(name .. "#sprite", "enable")
+			else
+				msg.post(name .. "#sprite", "disable")
+			end
+		end
+		place_footer(total)
+	end
+end

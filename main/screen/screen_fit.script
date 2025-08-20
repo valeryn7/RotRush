@@ -1,0 +1,26 @@
+-- /main/screen_fit.script
+local BASE_W, BASE_H = 768, 1152
+
+local function apply_fit(self)
+	local w, h = window.get_size()
+	local sx, sy = w / BASE_W, h / BASE_H
+	local scale = math.min(sx, sy)
+	local ox = (w - BASE_W * scale) * 0.5 / scale
+	local oy = (h - BASE_H * scale) * 0.5 / scale
+
+	go.set_scale(scale)                               -- escala todo el árbol
+	go.set_position(vmath.vector3(ox, oy, 0))         -- centra (letterbox)
+
+	-- no enviamos mensajes a nadie
+end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	apply_fit(self)
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("window_resized") then
+		apply_fit(self)
+	end
+end

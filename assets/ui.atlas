@@ -1,0 +1,4 @@
+images {
+  image: "/assets/ui/character1_icon.png"
+}
+extrude_borders: 2

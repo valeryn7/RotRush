@@ -1,0 +1,174 @@
+local levels = require "main.levels"
+local rendercam = require "rendercam.rendercam"
+local FOOTER_NAMES = { "item1", "item2", "item3" }
+
+local SPAWN_EVERY = 0.8
+local PAD = 32
+
+local ITEM_BASE_SIZE = 160
+local ITEM_WIDTH_FRAC = 0.18
+local ITEM_SCALE_MIN = 0.85
+local ITEM_SCALE_MAX = 1.6
+
+local function spawn_bounds()
+	local w, h = rendercam.window.x, rendercam.window.y
+	local left  = -w * 0.5 + PAD
+	local right =  w * 0.5 - PAD
+	local top   =  h * 0.5 + 64
+	return left, right, top
+end
+
+local function item_scale_for_width()
+	local w = rendercam.window.x
+	local target_w = w * ITEM_WIDTH_FRAC
+	local s = target_w / ITEM_BASE_SIZE
+	if s < ITEM_SCALE_MIN then s = ITEM_SCALE_MIN end
+	if s > ITEM_SCALE_MAX then s = ITEM_SCALE_MAX end
+	return s
+end
+
+local function input_to_world(x, y)
+	local w, h = rendercam.window.x, rendercam.window.y
+	return x - w * 0.5, y - h * 0.5
+end
+
+local function recipe_complete(self)
+	for _, k in ipairs(self.level.target) do
+		if not self.collected[k] then return false end
+	end
+	return true
+end
+
+local function spawn_item(self)
+	local filtered_pool = {}
+	for _, cfg in ipairs(self.level.pool) do
+		if not cfg.is_correct or not self.collected[cfg.kind] then
+			table.insert(filtered_pool, cfg)
+		end
+	end
+
+	-- Si ya no quedan ítems para spawnear, no hacer nada
+	if #filtered_pool == 0 then return end
+
+	local cfg = filtered_pool[math.random(#filtered_pool)]
+	local left, right, top = spawn_bounds()
+	local x = left + math.random() * (right - left)
+	local pos = vmath.vector3(x, top, 0)
+
+	local s = item_scale_for_width()
+	local id = factory.create("#item_factory", pos, nil, {
+		kind       = cfg.kind,
+		is_correct = cfg.is_correct,
+		radius     = 80 * s
+	})
+
+	go.set_parent(id, self.screen_go, true)
+	go.set_scale(vmath.vector3(s, s, 1), id)
+
+	table.insert(self.active_items, id)
+end
+
+local function update_footer(self)
+	local items = self.level.target
+	local total = #items
+
+	for i, kind in ipairs(items) do
+		local go_name = FOOTER_NAMES[i]
+		local sprite_id = go_name .. "#sprite"
+		local collected = self.collected[kind]
+		local tint = collected and vmath.vector4(1, 1, 1, 1) or vmath.vector4(1, 1, 1, 0.4)
+
+		if go.exists(go_name) then
+			sprite.play_flipbook(sprite_id, kind)
+			sprite.set_constant(sprite_id, "tint", tint)
+			msg.post(sprite_id, "enable")
+
+			-- Mostrar cantidad si fue recolectado
+			if collected then
+				-- Aquí podrías agregar números o efectos extra si tenés nodos o etiquetas
+			end
+		end
+	end
+
+	for i = total + 1, #FOOTER_NAMES do
+		msg.post(FOOTER_NAMES[i] .. "#sprite", "disable")
+	end
+
+	msg.post("footer#footer_fit", "place_footer", { total = total })
+end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	math.randomseed(os.time())
+
+	self.level = levels.LEVELS[1]
+	self.collected, self.target_set = {}, {}
+	for _, k in ipairs(self.level.target) do
+		self.target_set[k] = true
+	end
+
+	self.lives = 2
+	self.spawn_timer = 0
+	self.screen_go = go.get_parent()
+	self.active_items = {}
+
+	update_footer(self)
+end
+
+function update(self, dt)
+	self.spawn_timer = self.spawn_timer + dt
+	if self.spawn_timer >= SPAWN_EVERY then
+		self.spawn_timer = self.spawn_timer - SPAWN_EVERY
+		spawn_item(self)
+	end
+
+	if recipe_complete(self) then
+		print("🎉 WIN Nivel 1")
+		self.collected = {}
+		update_footer(self)
+	end
+end
+
+function on_input(self, action_id, action)
+	local is_click = (action_id == hash("click") or action_id == hash("touch"))
+	if is_click and action.pressed then
+		local wx, wy = input_to_world(action.x, action.y)
+		for _, id in ipairs(self.active_items) do
+			if go.exists(id) then
+				msg.post(id, hash("check_hit"), {
+					world_x = wx,
+					world_y = wy,
+					controller = msg.url()
+				})
+			end
+		end
+	end
+end
+
+function on_message(self, message_id, message)
+	if message_id == hash("item_picked") then
+		print("🧪 picked:", message.kind, "| correcto:", message.is_correct)
+		print("🔎 kind string:", hash_to_hex(message.kind))
+
+		if message.is_correct and self.target_set[message.kind] then
+			self.collected[message.kind] = true
+			update_footer(self)
+		else
+			self.lives = self.lives - 1
+			print("❌ fallo | vidas:", self.lives)
+			if self.lives <= 0 then
+				print("💀 GAME OVER")
+				self.lives = 2
+				self.collected = {}
+				update_footer(self)
+			end
+		end
+	elseif message_id == hash("item_destroyed") then
+		for i, id in ipairs(self.active_items) do
+			if id == message.id then
+				table.remove(self.active_items, i)
+				break
+			end
+		end
+	end
+end

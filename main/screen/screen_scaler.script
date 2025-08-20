@@ -1,0 +1,36 @@
+-- /main/screen/screen_scaler.script
+local rendercam = require "rendercam.rendercam"
+
+-- Tamaño base de diseño (tu mock de móvil)
+local BASE_W, BASE_H = 768, 1152
+
+-- límites para no pasarte (podés ajustar)
+local MIN_SCALE = 1.0   -- en móvil se ve 1:1
+local MAX_SCALE = 1.8   -- en desktop grande se agranda hasta 160%
+
+local function rescale()
+	local w = rendercam.window.x
+	local h = rendercam.window.y
+
+	-- Escala uniforme preservando layout base
+	local sx = w / BASE_W
+	local sy = h / BASE_H
+	local s = math.min(sx, sy)
+
+	-- Clampeamos para que en móvil no reduzca por debajo de 1
+	-- y en desktop no se “gigantice” infinito
+	if s < MIN_SCALE then s = MIN_SCALE end
+	if s > MAX_SCALE then s = MAX_SCALE end
+
+	go.set_scale(vmath.vector3(s, s, 1))
+end
+
+function init(self)
+	rescale()
+end
+
+function on_message(self, mid, msg, sender)
+	if mid == hash("window_resized") then
+		rescale()
+	end
+end
